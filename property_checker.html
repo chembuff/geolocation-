@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Boundary Checker</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            text-align: center;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 80%;
+            max-width: 400px;
+        }
+        h1 { color: #333; font-size: 1.5rem; }
+        #status {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .status-searching { background: #e1f5fe; color: #0288d1; }
+        .status-success { background: #e8f5e9; color: #2e7d32; }
+        .status-error { background: #ffebee; color: #c62828; }
+        button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:active { background-color: #0056b3; }
+        #coords { font-family: monospace; font-size: 0.8rem; color: #666; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>Property Checker</h1>
+    <p>Are you on your land?</p>
+    
+    <div id="status" class="status-searching">Press button to start</div>
+    
+    <button onclick="getLocation()">Check My Location</button>
+    
+    <div id="coords">Waiting for GPS...</div>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    // Calculated square boundary based on Centroid and Area (2410 sqft)
+    const PARCEL_BOUNDARY = [
+        [41.3956, -75.6708], // NW
+        [41.3956, -75.6704], // NE
+        [41.3951, -75.6704], // SE
+        [41.3951, -75.6708]  // SW
+    ];
+
+    function isInside(lat, lng, polygon) {
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i][0], yi = polygon[i][1];
+            const xj = polygon[j][0], yj = polygon[j][1];
+            const intersect = ((yi > lng) !== (yj > lng))
+                && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        // Note: The logic above is a standard Ray Casting implementation.
+        // For simplicity in this specific coordinate format, we use the lat/lng check.
+        return rayCast(lat, lng, polygon);
+    }
+
+    // Standard Point-in-Polygon (Ray Casting)
+    function rayCast(lat, lng, polygon) {
+        let x = lat, y = lng;
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            let xi = polygon[i][0], yi = polygon[i][1];
+            let xj = polygon[j][0], yj = polygon[j][1];
+            let intersect = ((yi > y) !== (yj > y))
+                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    function getLocation() {
+        const statusDiv = document.getElementById('status');
+        const coordsDiv = document.getElementById('coords');
+        
+        statusDiv.textContent = "Searching for GPS...";
+        statusDiv.className = "status-searching";
+
+        if (!navigator.geolocation) {
+            statusDiv.textContent = "Geolocation not supported by browser.";
+            statusDiv.className = "status-error";
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                coordsDiv.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+
+                if (rayCast(lat, lng, PARCEL_BOUNDARY)) {
+                    statusDiv.textContent = "✅ INSIDE PROPERTY";
+                    statusDiv.className = "status-success";
+                } else {
+                    statusDiv.textContent = "❌ OUTSIDE PROPERTY";
+                    statusDiv.className = "status-error";
+                }
+            },
+            (error) => {
+                statusDiv.textContent = "Error: " + error.message;
+                statusDiv.className = "status-error";
+            },
+            { enableHighAccuracy: true }
+        );
+    }
+</script>
+
+</body>
+</html>
+</document>
